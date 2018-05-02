@@ -1,0 +1,276 @@
+---
+title: "MA415 Final Project Workfile"
+author: "Lok Tin Kevin Chan"
+output: pdf_document
+---
+# Changepoint Detection in Financial Timeseries
+
+## Introduction
+
+Change points are abrupt variations in time series data. Such abrupt changes may represent transitions that occur between states. Detection of change points is useful in modelling and prediction of time series and is found in application areas such as medical condition monitoring, climate change detection, speech and image analysis, and human activity analysis. 
+
+## Methodology
+Changepoint detection is the name given to the problem of estimating the point(s) at which the statistical properties of a time-series observations change. In this project, I focus on the changes in mean and variance. The penalty function is chosen as SIC (Schwarz Information Criterion); and we employ the PELT (Pruned Exact Linear Time) searching algorithm for the change points proposed by Killick et al. (2012). 
+
+### Changepoint Detections
+
+```{r message=FALSE, warning=FALSE}
+library(readxl)
+library(tidyverse)
+library(changepoint)
+library(ggfortify)
+library(imputeTS)
+library(lubridate)
+library(padr)
+library(grid)
+library(gridExtra)
+library(plotly)
+library(devtools)
+library(stringr)
+library(moments)
+source("./Scripts/Clean data function.R")
+source("./Scripts/summary statistics.R")
+
+#Read data from in excel files(already removed bloomberg commands)
+Weekdays <- read_excel("./misc/weekdays.xlsx")
+News <- read_excel("./misc/news.xlsx")
+Brent <- read_excel("./data/Brent oil price data.xlsx")
+sp500 <- read_excel("./data/SP500 Data.xlsx")
+gold <- read_excel("./data/Gold price data.xlsx")
+bond <- read_excel("./data/tbill data.xlsx")
+vix <- read_excel("./data/vix data.xlsx")
+usdeur <- read_excel("./data/usdeur data.xlsx")
+
+#Clean the data & calculate the log return
+Brent <- clean.function(Brent)
+sp500 <- clean.function(sp500)
+gold <- clean.function(gold)
+bond <- clean.function(bond)
+vix <- clean.function(vix)
+usdeur <- clean.function(usdeur)
+```
+
+```{r}
+#Using Changepoint package to detect change opt amount point dates using PELT method
+
+Brent.Changepoint <- (cpt.meanvar(Brent$log_return, 
+                                  method = "PELT", 
+                                  test.stat = "Normal"))
+
+  
+SP500.Changepoint <- cpt.meanvar(sp500$log_return, 
+                                 method = "PELT", 
+                                 test.stat = "Normal")
+ 
+  
+gold.Changepoint <- cpt.meanvar(gold$log_return,
+                                method = "PELT", 
+                                test.stat = "Normal")
+
+
+vix.Changepoint <- cpt.meanvar(vix$log_return, 
+                               method = "PELT", 
+                               test.stat = "Normal")
+ 
+
+usdeur.Changepoint <- cpt.meanvar(usdeur$log_return, 
+                                  method = "PELT", 
+                                  test.stat = "Normal")
+
+B.Date <-Brent$Date[cpts(Brent.Changepoint)]
+sp.Date <- sp500$Date[cpts(SP500.Changepoint)]
+g.Date <- gold$Date[cpts(gold.Changepoint)]
+u.Date <- usdeur$Date[cpts(usdeur.Changepoint)]
+v.Date <- vix$Date[cpts(vix.Changepoint)]
+ 
+```
+
+
+```{r}
+#Aggregate the data into one file and tidy the data
+
+Agg_Price <- Brent[1:2] %>% 
+                rename(Brent = Price) %>% 
+                right_join(sp500[1:2]) %>% 
+                rename(SP500 = Price) %>% 
+                right_join(gold[1:2]) %>% 
+                rename(Gold = Price) %>% 
+                right_join(vix[1:2]) %>% 
+                rename(VIX = Price) %>% 
+                right_join(usdeur[1:2]) %>% 
+                rename(USD_EUR_Exchange = Price)
+
+Agg.tidy <- Agg_Price %>% 
+                gather(key = "Index", value = "Price", -Date)
+              
+
+```
+
+
+### Brent Crude Oil Changepoint Detection
+
+```{r}
+#Create Brent Changepoint Detection Plot
+
+Brent.Plot1 <- ggplot(Brent, aes(as.Date(Date),log_return))+ 
+  geom_line()+
+  geom_vline(xintercept = as.Date(B.Date) , color = "red", linetype = "dotdash", size = 1)+
+  ylab("log returns")+
+  ggtitle("Brent Crude Oil Changepoints Analysis")+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+Brent.Plot2 <- ggplot(Brent, aes(Date, Price))+  geom_line()+
+  geom_vline(xintercept = as.numeric(B.Date), color = "red", linetype = "dotdash", size = 1)+
+  xlab("Date")+ 
+  ylab("Price")
+
+grid.newpage()
+  grid.draw(rbind(ggplotGrob(Brent.Plot1),ggplotGrob(Brent.Plot2), size = "last"))
+  
+as.tibble(News[which(as.Date(News$Date) %in% as.Date(B.Date)),])  
+
+```
+### S&P 500 Changepoint detection
+
+```{r}
+#Create S&P 500 changepoint detection
+
+sp500.Plot1 <- ggplot(sp500, aes(Date,log_return))+ 
+  geom_line()+
+  geom_vline(xintercept = as.numeric(sp.Date), color = "Blue", linetype = "dotdash", size = 1)+
+  ylab("log returns")+
+  ggtitle("S&P 500 Anomaly Detection")+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+sp500.Plot2 <- ggplot(sp500, aes(Date, Price))+  geom_line()+
+  geom_vline(xintercept = as.numeric(sp.Date), color = "Blue", linetype = "dotdash", size = 1)+
+  xlab("Date")+ 
+  ylab("Price")
+
+
+grid.newpage()
+  grid.draw(rbind(ggplotGrob(sp500.Plot1),ggplotGrob(sp500.Plot2), size = "last"))
+  
+as.tibble(News[which(as.Date(News$Date) %in% as.Date(sp.Date)),])
+
+```
+
+## Gold Changepoint detectio
+```{r}
+#Gold changepoint detection plot
+
+gold.Plot1 <- ggplot(gold, aes(Date,log_return))+ 
+  geom_line()+
+  geom_vline(xintercept = as.numeric(g.Date), color = "Yellow", linetype = "dotdash", size = 1)+
+  ylab("log returns")+
+  ggtitle("Gold Anomaly Detection")+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+gold.Plot2 <- ggplot(gold, aes(Date, Price))+  geom_line()+
+  geom_vline(xintercept = as.numeric(g.Date), color = "Yellow", linetype = "dotdash", size = 1)+
+  xlab("Date")+ 
+  ylab("Price")
+
+
+grid.newpage()
+  grid.draw(rbind(ggplotGrob(gold.Plot1),ggplotGrob(gold.Plot2), size = "last"))
+  
+  
+```
+```{r}
+#Vix changepoint detection plot
+
+vix.Plot1 <- ggplot(vix, aes(Date,log_return))+ 
+  geom_line()+
+  geom_vline(xintercept = as.numeric(v.Date), color = "Green", linetype = "dotdash")+
+  ylab("log returns")+
+  ggtitle("VIX Anomaly Detection")+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+vix.Plot2 <- ggplot(vix, aes(Date, Price))+  geom_line()+
+  geom_vline(xintercept = as.numeric(v.Date), color = "Green", linetype = "dotdash", size = 1)+
+  xlab("Date")+ 
+  ylab("Price")
+
+
+grid.newpage()
+  grid.draw(rbind(ggplotGrob(vix.Plot1),ggplotGrob(vix.Plot2), size = "last"))
+```
+```{r}
+#USD EUR Changepoint detection plot
+
+usdeur.Plot1 <- ggplot(usdeur, aes(Date,log_return))+ 
+  geom_line()+
+  geom_vline(xintercept = as.numeric(u.Date), color = "purple", linetype = "dotdash")+
+  ylab("log returns")+
+  ggtitle("VIX Anomaly Detection")+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+usdeur.Plot2 <- ggplot(usdeur, aes(Date, Price))+  geom_line()+
+  geom_vline(xintercept = as.numeric(u.Date), color = "purple", linetype = "dotdash", size = 1)+
+  xlab("Date")+ 
+  ylab("Price")
+
+
+grid.newpage()
+  grid.draw(rbind(ggplotGrob(usdeur.Plot1),ggplotGrob(usdeur.Plot2), size = "last"))
+```
+
+## Summary Statistics
+```{r}
+#Create the summary statistics (mean, var, skewness, kewtosis)
+
+
+Brent.Ss <-sum.stat(Brent$log_return)
+sp500.Ss <- sum.stat(sp500$log_return)
+gold.ss <- sum.stat(gold$log_return)
+vix.ss <- sum.stat(vix$log_return)
+usdeur.ss <- sum.stat(usdeur$log_return)
+
+
+summary_statistics <-  cbind(Brent.Ss, sp500.Ss, gold.ss,vix.ss,usdeur.ss)
+
+colnames(summary_statistics) <- c("Brent","S&P 500","Gold","VIX","USD EUR")
+summary_statistics
+
+```
+
+## Correlation Table
+```{r}
+# Create the correlation table
+
+    tmp<- cbind(Brent$log_return,sp500$log_return,gold$log_return,vix$log_return,usdeur$log_return)
+    colnames(tmp) <- c("Brent","S&P 500","Gold","VIX","USD EUR")
+    corr.table <- round(cor(tmp),2)
+    corr.table
+```
+
+
+
+
+## Writing clean and tidy data to csv for Shiny App
+```{r}
+#Writing Result tables to csv files for Shiny Application
+
+# write.csv(Brent, file = "Brent.csv")
+# write.csv(sp500, file = "sp500.csv")
+# write.csv(gold, file = "gold.csv")
+# write.csv(vix, file = "vix.csv")
+# write.csv(bond, file = "bond.csv")
+# write.csv(usdeur, file = "usdeur.csv")
+# write.csv(Agg_Price, file = "Agg_Price.csv")
+# write.csv(Agg.tidy, file = "Agg_tidy.csv")
+# write.csv(summary_statistics, file = "summary.csv")
+# write.csv(corr.table, file = "corr_table.csv")
+
+```
